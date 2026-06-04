@@ -64,6 +64,8 @@ main { max-width: 800px; margin: 0 auto; padding: 1.5rem 1rem; }
   font-size: 11px; font-weight: 600; color: #666;
   background: #f0f0ee; border-radius: 4px;
   padding: 2px 7px; white-space: nowrap; flex-shrink: 0;
+  font-family: 'Courier New', monospace;
+  min-width: 4.5em; text-align: right; display: inline-block;
 }
 .facility-name {
   font-size: 15px; font-weight: 600; color: #1a1a1a;
@@ -139,9 +141,18 @@ function esc(s) {
     .replace(/>/g, '&gt;');
 }
 
+// 全角数字・英字を半角に統一して検索用に正規化
+function normalize(s) {
+  return String(s).replace(/[０-９Ａ-Ｚａ-ｚ]/g, c =>
+    String.fromCharCode(c.charCodeAt(0) - 0xFEE0)
+  ).toLowerCase();
+}
+
 function highlight(text, q) {
   if (!q || !text) return esc(text);
-  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  const normText = normalize(text);
+  const normQ = normalize(q);
+  const idx = normText.indexOf(normQ);
   if (idx === -1) return esc(text);
   return esc(text.slice(0, idx))
     + '<mark>' + esc(text.slice(idx, idx + q.length)) + '</mark>'
@@ -150,12 +161,12 @@ function highlight(text, q) {
 
 function render(q) {
   const trimQ = q.trim();
-  const lq = trimQ.toLowerCase();
+  const normQ = normalize(trimQ);
   const hits = trimQ
     ? DATA.filter(d =>
-        d.id.toLowerCase().includes(lq) ||
-        d.name.toLowerCase().includes(lq) ||
-        d.pole.toLowerCase().includes(lq)
+        normalize(d.id).includes(normQ) ||
+        normalize(d.name).includes(normQ) ||
+        normalize(d.pole).includes(normQ)
       )
     : DATA;
 
@@ -182,15 +193,15 @@ function render(q) {
         <span class="facility-name">${highlight(d.name, trimQ)}</span>
         <span class="pole-wrap">
           ${d.pole
-            ? `<span class="pole-label">電柱</span><span class="pole-no">${highlight(d.pole, trimQ)}</span>`
+            ? `<span class="pole-label">電柱番号</span><span class="pole-no">${highlight(d.pole, trimQ)}</span>`
             : `<span class="pole-empty">電柱番号なし</span>`}
         </span>
       </div>
       ${hasSub(d) ? `
       <div class="sub-info">
-        ${d.office     ? `<span>${esc(d.office)}</span>` : ''}
-        ${d.substation ? `<span>${esc(d.substation)}</span>` : ''}
-        ${d.line       ? `<span>${esc(d.line)}</span>` : ''}
+        ${d.office     ? `<span>${esc(d.office)}営業所</span>` : ''}
+        ${d.substation ? `<span>${esc(d.substation)}変電所</span>` : ''}
+        ${d.line       ? `<span>${esc(d.line)}線</span>` : ''}
       </div>` : ''}
     </div>
   `).join('');
