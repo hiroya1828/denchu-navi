@@ -56,29 +56,35 @@ main { max-width: 800px; margin: 0 auto; padding: 1.5rem 1rem; }
   transition: border-color 0.15s;
 }
 .card:hover { border-color: #bbb; }
-.card-main {
+/* 1段目：管理番号 + 事業場名 */
+.card-row1 {
   display: flex; align-items: baseline;
-  gap: 8px; flex-wrap: wrap; margin-bottom: 5px;
+  gap: 8px; margin-bottom: 5px;
+}
+/* 2段目：補足事項 + 電柱番号 */
+.card-row2 {
+  display: flex; align-items: baseline;
+  gap: 8px; justify-content: flex-end;
 }
 .mgmt-no {
-  font-size: 11px; font-weight: 600; color: #666;
+  font-size: 13px; font-weight: 700; color: #555;
   background: #f0f0ee; border-radius: 4px;
-  padding: 2px 7px; white-space: nowrap; flex-shrink: 0;
+  padding: 2px 10px; white-space: nowrap; flex-shrink: 0;
   font-family: 'Courier New', monospace;
-  min-width: 4.5em; text-align: right; display: inline-block;
+  min-width: 4.5em; text-align: center;
 }
 .facility-name {
   font-size: 15px; font-weight: 600; color: #1a1a1a;
   flex: 1; min-width: 0;
 }
-.pole-wrap { margin-left: auto; white-space: nowrap; flex-shrink: 0; }
-.pole-label { font-size: 11px; color: #888; margin-right: 3px; }
-.pole-no { font-size: 15px; font-weight: 600; color: #1a5fa8; }
-.pole-empty { font-size: 12px; color: #bbb; }
-.sub-info {
-  font-size: 12px; color: #999;
-  display: flex; gap: 12px; flex-wrap: wrap;
+.pole-sub {
+  font-size: 12px; color: #aaa;
 }
+.pole-no {
+  font-size: 15px; font-weight: 600; color: #1a5fa8;
+  white-space: nowrap;
+}
+.pole-empty { font-size: 12px; color: #bbb; margin-left: auto; }
 mark {
   background: transparent; color: inherit;
   font-weight: 700;
@@ -86,16 +92,9 @@ mark {
   text-decoration-color: #1a5fa8;
   text-underline-offset: 2px;
 }
-.empty {
-  text-align: center; padding: 3rem 0;
-  color: #999; font-size: 14px;
-}
-.loading {
-  text-align: center; padding: 2rem 0;
-  color: #999; font-size: 14px;
-}
+.empty { text-align: center; padding: 3rem 0; color: #999; font-size: 14px; }
+.loading { text-align: center; padding: 2rem 0; color: #999; font-size: 14px; }
 @media (max-width: 480px) {
-  .card-main { gap: 6px; }
   .facility-name { font-size: 14px; }
   .pole-no { font-size: 14px; }
 }
@@ -141,7 +140,6 @@ function esc(s) {
     .replace(/>/g, '&gt;');
 }
 
-// 全角数字・英字を半角に統一して検索用に正規化
 function normalize(s) {
   return String(s).replace(/[０-９Ａ-Ｚａ-ｚ]/g, c =>
     String.fromCharCode(c.charCodeAt(0) - 0xFEE0)
@@ -184,33 +182,37 @@ function render(q) {
     return;
   }
 
-  const hasSub = d => d.office || d.substation || d.line;
-
-  resultsEl.innerHTML = hits.map(d => `
+  resultsEl.innerHTML = hits.map(d => {
+    const subHtml = [
+      d.office     ? esc(d.office) + '営業所' : '',
+      d.substation ? esc(d.substation) + '変電所' : '',
+      d.line       ? esc(d.line) + '線' : '',
+    ].filter(Boolean).join('　');
+    return `
     <div class="card">
-      <div class="card-main">
+      <div class="card-row1">
         <span class="mgmt-no">${highlight(d.id, trimQ)}</span>
         <span class="facility-name">${highlight(d.name, trimQ)}</span>
-        <span class="pole-wrap">
-          ${d.pole
-            ? `<span class="pole-label">電柱番号</span><span class="pole-no">${highlight(d.pole, trimQ)}</span>`
-            : `<span class="pole-empty">電柱番号なし</span>`}
-        </span>
       </div>
-      ${hasSub(d) ? `
-      <div class="sub-info">
-        ${d.office     ? `<span>${esc(d.office)}営業所</span>` : ''}
-        ${d.substation ? `<span>${esc(d.substation)}変電所</span>` : ''}
-        ${d.line       ? `<span>${esc(d.line)}線</span>` : ''}
-      </div>` : ''}
-    </div>
-  `).join('');
+      <div class="card-row2">
+        <span class="pole-sub">${subHtml}</span>
+        ${d.pole
+          ? `<span class="pole-no">${highlight(d.pole, trimQ)}</span>`
+          : `<span class="pole-empty">電柱番号なし</span>`}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 const qEl = document.getElementById('q');
 const clearBtn = document.getElementById('clear-btn');
 qEl.addEventListener('input', () => render(qEl.value));
 clearBtn.addEventListener('click', () => { qEl.value = ''; qEl.focus(); render(''); });
+
+const SAMPLE_CSV = `管理番号,事業場名,営業所,変電所,線,電柱番号
+1,サンプル商事,中央,第一,本町,001ア001
+2,サンプル工業,北部,第二,北町,002イ002
+3,サンプル病院,南部,第三,南町,003ウ003`;
 
 fetch('./data.csv')
   .then(r => {
@@ -222,9 +224,10 @@ fetch('./data.csv')
     render('');
   })
   .catch(() => {
-    document.getElementById('status').textContent = 'データの取得に失敗しました';
-    document.getElementById('results').innerHTML =
-      '<div class="empty">data.csv を同じフォルダに置いてください</div>';
+    DATA = parseCSV(SAMPLE_CSV);
+    document.getElementById('status').innerHTML =
+      '⚠️ data.csv が見つからないため、サンプルデータを表示しています';
+    render('');
   });
 </script>
 </body>
