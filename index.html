@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>電柱番号検索</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  background: #f5f5f3;
+  color: #1a1a1a;
+  min-height: 100vh;
+}
+header {
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 1rem 1.5rem;
+}
+header h1 { font-size: 16px; font-weight: 600; color: #333; }
+main { max-width: 800px; margin: 0 auto; padding: 1.5rem 1rem; }
+.search-wrap { position: relative; margin-bottom: 0.75rem; }
+.search-wrap input {
+  width: 100%;
+  font-size: 16px;
+  padding: 11px 44px 11px 16px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  background: #fff;
+  color: #1a1a1a;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.search-wrap input:focus {
+  border-color: #888;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.07);
+}
+.search-icon {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  color: #aaa; font-size: 18px; pointer-events: none;
+}
+.clear-btn {
+  position: absolute; right: 38px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer; color: #aaa;
+  font-size: 16px; padding: 4px; display: none; line-height: 1;
+}
+.clear-btn:hover { color: #555; }
+.status { font-size: 13px; color: #777; margin-bottom: 1rem; }
+.status strong { color: #333; }
+.results { display: flex; flex-direction: column; gap: 8px; }
+.card {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  padding: 0.85rem 1.1rem;
+  transition: border-color 0.15s;
+}
+.card:hover { border-color: #bbb; }
+.card-main {
+  display: flex; align-items: baseline;
+  gap: 8px; flex-wrap: wrap; margin-bottom: 5px;
+}
+.mgmt-no {
+  font-size: 11px; font-weight: 600; color: #666;
+  background: #f0f0ee; border-radius: 4px;
+  padding: 2px 7px; white-space: nowrap; flex-shrink: 0;
+}
+.facility-name {
+  font-size: 15px; font-weight: 600; color: #1a1a1a;
+  flex: 1; min-width: 0;
+}
+.pole-wrap { margin-left: auto; white-space: nowrap; flex-shrink: 0; }
+.pole-label { font-size: 11px; color: #888; margin-right: 3px; }
+.pole-no { font-size: 15px; font-weight: 600; color: #1a5fa8; }
+.pole-empty { font-size: 12px; color: #bbb; }
+.sub-info {
+  font-size: 12px; color: #999;
+  display: flex; gap: 12px; flex-wrap: wrap;
+}
+mark {
+  background: transparent; color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: #1a5fa8;
+  text-underline-offset: 2px;
+}
+.empty {
+  text-align: center; padding: 3rem 0;
+  color: #999; font-size: 14px;
+}
+.loading {
+  text-align: center; padding: 2rem 0;
+  color: #999; font-size: 14px;
+}
+@media (max-width: 480px) {
+  .card-main { gap: 6px; }
+  .facility-name { font-size: 14px; }
+  .pole-no { font-size: 14px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ 電柱番号検索</h1>
+</header>
+<main>
+  <div class="search-wrap">
+    <input type="text" id="q" placeholder="管理番号・事業場名・電柱番号で検索" autocomplete="off" />
+    <button class="clear-btn" id="clear-btn" aria-label="クリア">✕</button>
+    <span class="search-icon">🔍</span>
+  </div>
+  <div class="status" id="status">読み込み中...</div>
+  <div class="results" id="results">
+    <div class="loading">データを読み込んでいます...</div>
+  </div>
+</main>
+<script>
+let DATA = [];
+
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  return lines.slice(1).map(line => {
+    const cols = line.split(',');
+    return {
+      id:         (cols[0] || '').trim(),
+      name:       (cols[1] || '').trim(),
+      office:     (cols[2] || '').trim(),
+      substation: (cols[3] || '').trim(),
+      line:       (cols[4] || '').trim(),
+      pole:       (cols[5] || '').trim(),
+    };
+  }).filter(d => d.id || d.name);
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function highlight(text, q) {
+  if (!q || !text) return esc(text);
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx === -1) return esc(text);
+  return esc(text.slice(0, idx))
+    + '<mark>' + esc(text.slice(idx, idx + q.length)) + '</mark>'
+    + esc(text.slice(idx + q.length));
+}
+
+function render(q) {
+  const trimQ = q.trim();
+  const lq = trimQ.toLowerCase();
+  const hits = trimQ
+    ? DATA.filter(d =>
+        d.id.toLowerCase().includes(lq) ||
+        d.name.toLowerCase().includes(lq) ||
+        d.pole.toLowerCase().includes(lq)
+      )
+    : DATA;
+
+  document.getElementById('clear-btn').style.display = trimQ ? 'block' : 'none';
+
+  const statusEl = document.getElementById('status');
+  statusEl.innerHTML = trimQ
+    ? `<strong>${hits.length}</strong> 件ヒット（全 ${DATA.length} 件中）`
+    : `全 <strong>${DATA.length}</strong> 件`;
+
+  const resultsEl = document.getElementById('results');
+
+  if (hits.length === 0) {
+    resultsEl.innerHTML = '<div class="empty">該当する事業場が見つかりませんでした</div>';
+    return;
+  }
+
+  const hasSub = d => d.office || d.substation || d.line;
+
+  resultsEl.innerHTML = hits.map(d => `
+    <div class="card">
+      <div class="card-main">
+        <span class="mgmt-no">${highlight(d.id, trimQ)}</span>
+        <span class="facility-name">${highlight(d.name, trimQ)}</span>
+        <span class="pole-wrap">
+          ${d.pole
+            ? `<span class="pole-label">電柱</span><span class="pole-no">${highlight(d.pole, trimQ)}</span>`
+            : `<span class="pole-empty">電柱番号なし</span>`}
+        </span>
+      </div>
+      ${hasSub(d) ? `
+      <div class="sub-info">
+        ${d.office     ? `<span>${esc(d.office)}</span>` : ''}
+        ${d.substation ? `<span>${esc(d.substation)}</span>` : ''}
+        ${d.line       ? `<span>${esc(d.line)}</span>` : ''}
+      </div>` : ''}
+    </div>
+  `).join('');
+}
+
+const qEl = document.getElementById('q');
+const clearBtn = document.getElementById('clear-btn');
+qEl.addEventListener('input', () => render(qEl.value));
+clearBtn.addEventListener('click', () => { qEl.value = ''; qEl.focus(); render(''); });
+
+fetch('./data.csv')
+  .then(r => {
+    if (!r.ok) throw new Error('fetch failed');
+    return r.text();
+  })
+  .then(text => {
+    DATA = parseCSV(text);
+    render('');
+  })
+  .catch(() => {
+    document.getElementById('status').textContent = 'データの取得に失敗しました';
+    document.getElementById('results').innerHTML =
+      '<div class="empty">data.csv を同じフォルダに置いてください</div>';
+  });
+</script>
+</body>
+</html>
