@@ -180,10 +180,9 @@ mark {
   line-height: 1.4;
   margin-bottom: 1.8rem;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 4px;
+  gap: 10px;
 }
 
 /* 電柱番号メイン */
@@ -396,6 +395,9 @@ function showDetail(d) {
   const detailPage = document.getElementById('page-detail');
   detailPage.style.display = 'flex';
 
+  // 履歴に詳細画面を積む → Androidの戻るボタンで popstate が発火する
+  history.pushState({ page: 'detail' }, '');
+
   const tel     = d.office ? OFFICES[d.office] || null : null;
   const hasPole = !!d.pole;
 
@@ -407,7 +409,7 @@ function showDetail(d) {
 
   document.getElementById('detail-body').innerHTML = `
     <div class="detail-name">
-      <span class="detail-mgmt">${esc(d.id)}</span>　${esc(d.name)}
+      <span class="detail-mgmt">${esc(d.id)}</span>${esc(d.name)}
     </div>
     <div class="detail-pole-number${hasPole ? '' : ' unregistered'}">
       ${hasPole ? esc(toZenkaku(d.pole)) : '未登録'}
@@ -429,9 +431,21 @@ function showDetail(d) {
 }
 
 /* ── 検索画面に戻る ── */
-document.getElementById('back-btn').addEventListener('click', () => {
+function goBack() {
   document.getElementById('page-detail').style.display = 'none';
   document.getElementById('page-search').style.display = 'block';
+}
+
+document.getElementById('back-btn').addEventListener('click', () => {
+  // pushState で積んだ分を戻す（popstate が発火し goBack が呼ばれる）
+  history.back();
+});
+
+// Androidの戻るボタン / ブラウザ戻るボタン
+window.addEventListener('popstate', (e) => {
+  if (document.getElementById('page-detail').style.display === 'flex') {
+    goBack();
+  }
 });
 
 /* ══ 検索画面レンダリング ══ */
