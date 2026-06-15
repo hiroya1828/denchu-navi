@@ -379,11 +379,23 @@ function showCallDialog(officeName, tel) {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  const close = () => overlay.remove();
+
+  // モーダル用に履歴を1件積む
+  history.pushState({ page: 'dialog' }, '');
+
+  const close = () => {
+    overlay.remove();
+    // popstate 経由でない場合（ボタン押下）は履歴を1件戻す
+    if (history.state && history.state.page === 'dialog') {
+      history.back();
+    }
+  };
+
   overlay.querySelector('#dlg-cancel').addEventListener('click', close);
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   overlay.querySelector('#dlg-call').addEventListener('click', () => {
-    close();
+    overlay.remove();
+    if (history.state && history.state.page === 'dialog') history.back();
     window.location.href = 'tel:' + tel.replace(/-/g, '');
   });
   overlay.querySelector('#dlg-cancel').focus();
@@ -443,6 +455,12 @@ document.getElementById('back-btn').addEventListener('click', () => {
 
 // Androidの戻るボタン / ブラウザ戻るボタン
 window.addEventListener('popstate', (e) => {
+  // モーダルが開いていれば閉じる（詳細画面には戻らない）
+  const overlay = document.querySelector('.tel-dialog-overlay');
+  if (overlay) {
+    overlay.remove();
+    return;
+  }
   if (document.getElementById('page-detail').style.display === 'flex') {
     goBack();
   }
