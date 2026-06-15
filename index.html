@@ -219,6 +219,7 @@ mark {
   border: none; border-radius: 14px;
   font-size: 17px; font-weight: 700;
   cursor: pointer;
+  text-decoration: none;
   transition: opacity 0.15s, transform 0.1s;
   margin-bottom: 1.4rem;
 }
@@ -230,45 +231,7 @@ mark {
 .detail-office-btn.no-tel:hover  { opacity: 1; }
 .detail-office-btn.no-tel:active { transform: none; }
 
-/* 電話確認ダイアログ */
-.tel-dialog-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.38);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 999; padding: 1.5rem;
-}
-.tel-dialog {
-  background: #fff;
-  border-radius: 16px;
-  padding: 1.75rem 1.75rem 1.5rem;
-  max-width: 320px; width: 100%;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.2);
-  text-align: center;
-}
-.tel-dialog-icon { font-size: 32px; margin-bottom: 0.5rem; }
-.tel-dialog h2 {
-  font-size: 13px; font-weight: 500; color: #aaa;
-  margin-bottom: 0.4rem;
-}
-.tel-dialog .tel-subtitle {
-  font-size: 22px; font-weight: 800; color: #1a1a1a;
-  margin-bottom: 0.6rem;
-}
-.tel-dialog .tel-number {
-  font-size: 20px; font-weight: 700; color: #1a5fa8;
-  font-family: 'SF Mono', 'Noto Sans Mono', 'BIZ UDGothic', monospace;
-  letter-spacing: 0.05em;
-  margin-bottom: 1.4rem;
-}
-.tel-dialog-btns { display: flex; gap: 8px; }
-.tel-dialog-btns button {
-  flex: 1; padding: 11px 0; border-radius: 10px;
-  font-size: 15px; font-weight: 700; cursor: pointer;
-  border: none; transition: opacity 0.15s;
-}
-.tel-dialog-btns button:hover { opacity: 0.82; }
-.btn-cancel { background: #f0f0ee; color: #555; }
-.btn-call   { background: #1a5fa8; color: #fff; }
+/* 電話確認ダイアログ廃止 */
 </style>
 </head>
 <body>
@@ -363,44 +326,6 @@ function highlight(text, q) {
     + esc(text.slice(idx + q.length));
 }
 
-/* ── 電話確認ダイアログ ── */
-function showCallDialog(officeName, tel) {
-  const overlay = document.createElement('div');
-  overlay.className = 'tel-dialog-overlay';
-  overlay.innerHTML = `
-    <div class="tel-dialog" role="dialog" aria-modal="true">
-      <div class="tel-dialog-icon">📞</div>
-      <h2>電話をかけますか？</h2>
-      <div class="tel-subtitle">${esc(officeName)}営業所</div>
-      <div class="tel-number">${esc(tel)}</div>
-      <div class="tel-dialog-btns">
-        <button class="btn-cancel" id="dlg-cancel">キャンセル</button>
-        <button class="btn-call"   id="dlg-call">発信する</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-
-  // モーダル用に履歴を1件積む
-  history.pushState({ page: 'dialog' }, '');
-
-  // ボタン押下時はoverlay除去のみ。履歴は history.back() で戻し、
-  // popstate ハンドラー側で overlay.remove() が呼ばれないよう
-  // 先に overlay を除去してから back() する
-  const closeByButton = () => {
-    overlay.remove();   // 先に除去
-    history.back();     // dialog 分の履歴を戻す（popstate が発火するが overlay はもうない）
-  };
-
-  overlay.querySelector('#dlg-cancel').addEventListener('click', closeByButton);
-  overlay.addEventListener('click', e => { if (e.target === overlay) closeByButton(); });
-  overlay.querySelector('#dlg-call').addEventListener('click', () => {
-    overlay.remove();
-    history.back();
-    window.location.href = 'tel:' + tel.replace(/-/g, '');
-  });
-  overlay.querySelector('#dlg-cancel').focus();
-}
-
 /* ══ 詳細画面 ══ */
 function showDetail(d) {
   document.getElementById('page-search').style.display = 'none';
@@ -428,16 +353,10 @@ function showDetail(d) {
     </div>
     ${subParts ? `<div class="detail-sub-text">${subParts}</div>` : '<div style="margin-bottom:2rem"></div>'}
     ${d.office ? `
-    <button class="detail-office-btn${tel ? '' : ' no-tel'}" id="office-call-btn">
+    <a class="detail-office-btn${tel ? '' : ' no-tel'}" ${tel ? `href="tel:${tel.replace(/-/g,'')}"` : ''}>
       📞 ${esc(d.office)}営業所${tel ? '' : '（電話番号なし）'}
-    </button>` : ''}
+    </a>` : ''}
   `;
-
-  if (d.office && tel) {
-    document.getElementById('office-call-btn').addEventListener('click', () => {
-      showCallDialog(d.office, tel);
-    });
-  }
 
   window.scrollTo(0, 0);
 }
@@ -455,12 +374,6 @@ document.getElementById('back-btn').addEventListener('click', () => {
 
 // Androidの戻るボタン / ブラウザ戻るボタン
 window.addEventListener('popstate', (e) => {
-  // モーダルが開いていれば閉じる（詳細画面には戻らない）
-  const overlay = document.querySelector('.tel-dialog-overlay');
-  if (overlay) {
-    overlay.remove();
-    return;
-  }
   if (document.getElementById('page-detail').style.display === 'flex') {
     goBack();
   }
