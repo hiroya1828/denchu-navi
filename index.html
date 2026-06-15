@@ -383,19 +383,19 @@ function showCallDialog(officeName, tel) {
   // モーダル用に履歴を1件積む
   history.pushState({ page: 'dialog' }, '');
 
-  const close = () => {
-    overlay.remove();
-    // popstate 経由でない場合（ボタン押下）は履歴を1件戻す
-    if (history.state && history.state.page === 'dialog') {
-      history.back();
-    }
+  // ボタン押下時はoverlay除去のみ。履歴は history.back() で戻し、
+  // popstate ハンドラー側で overlay.remove() が呼ばれないよう
+  // 先に overlay を除去してから back() する
+  const closeByButton = () => {
+    overlay.remove();   // 先に除去
+    history.back();     // dialog 分の履歴を戻す（popstate が発火するが overlay はもうない）
   };
 
-  overlay.querySelector('#dlg-cancel').addEventListener('click', close);
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  overlay.querySelector('#dlg-cancel').addEventListener('click', closeByButton);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeByButton(); });
   overlay.querySelector('#dlg-call').addEventListener('click', () => {
     overlay.remove();
-    if (history.state && history.state.page === 'dialog') history.back();
+    history.back();
     window.location.href = 'tel:' + tel.replace(/-/g, '');
   });
   overlay.querySelector('#dlg-cancel').focus();
